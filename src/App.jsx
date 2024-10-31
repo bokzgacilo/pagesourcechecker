@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react'
 import './App.css'
-import { Button, Container, Flex, Grid, Heading, Stack, Text, Textarea, useToast } from '@chakra-ui/react'
+import { Button, Container, Flex, Grid, Heading, Input, Modal, ModalBody, ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalOverlay, Stack, Text, Textarea, useDisclosure, useToast } from '@chakra-ui/react'
 import axios from 'axios'
+import { supabase } from './supabase';
+import CredentialModalContent from './components/CredentialModalContent';
 
 function App() {
   const maxLines = 2500;
   const toast = useToast()
+
+  const [isAuth, SetIsAuth] = useState(false)
+  const [Role, SetRole] = useState("")
+
+  const [Username, SetUsername] = useState("")
+  const [Password, SetPassword] = useState("")
 
   const [Keyword, SetKeyword] = useState("")
   const [KeywordCount, SetKeywordCounter] = useState(0)
@@ -48,8 +56,8 @@ function App() {
   
     // Race the Axios post request against the timeout promise
     return Promise.race([
-      // axios.post('http://62.72.29.28/check', {
-      axios.post('http://localhost:3000/check', {
+      axios.post('http://62.72.29.28:3000/check', {
+      // axios.post('http://localhost:3000/check', {
         keyword: keyword,
         url: url,
         instanceNumber: instanceNumber
@@ -61,6 +69,51 @@ function App() {
       timeoutPromise
     ]);
   };
+
+  const HandleLogin = async () => {
+    const { data, error } = await supabase
+      .from("credentials") // Replace with your actual table name
+      .select("*")
+      .eq("username", Username)
+      .eq("password", Password);
+
+      if (error || data.length === 0) {
+        toast({
+          title: "Login Failed.",
+          description: "Invalid username or password.",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+
+      } else {
+        // If data is retrieved, login is successful
+        toast({
+          title: "Login Successful.",
+          description: "You have successfully logged in.",
+          status: "success",
+          duration: 5000,
+          isClosable: true,
+        });
+        console.log(data)
+        SetRole(data[0].role)
+
+        if(data[0].role === "Admin"){
+          localStorage.setItem("adminrole", true);
+        }
+
+        SetIsAuth(true);
+        localStorage.setItem("isauth", true);
+      }
+  }
+
+  const HandleLogout = () => {
+    SetIsAuth(false)
+    SetRole("")
+    localStorage.clear();
+
+    location.reload()
+  }
   
 
   useEffect(() => {
@@ -93,9 +146,8 @@ function App() {
     }
 
     try {
-      // Example POST request to your API endpoint
-      // const response = await axios.post('http://62.72.29.28/excel', { 
-      const response = await axios.post('http://localhost:3000/excel', { 
+      const response = await axios.post('http://62.72.29.28:3000/excel', { 
+      // const response = await axios.post('http://localhost:3000/excel', { 
         keywords: Keyword, 
         instanceNumber: instanceNumber,
         json: downloadableResults
@@ -150,8 +202,6 @@ function App() {
         setIsScanning5(true);
         break;
     }
-
-    console.log(textareaArray)
 
     for(const url of textareaArray){
       try {
@@ -249,12 +299,23 @@ function App() {
       }
     }
   }
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   return (
     <Container p={0} maxW='full'>
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay />
+        <CredentialModalContent />
+      </Modal>
+
       <Flex p={4} backgroundColor="blue.700">
-        <Heading size="md" color="#fff">Page Source Checker Using Keyword</Heading>
+
+        <Heading size="md" color="#fff" mr='auto'>Page Source Checker Using Keyword</Heading>
+        {Role === "Admin" || localStorage.getItem('adminrole') ? <Button mr={4} onClick={onOpen} size='sm' colorScheme='blue'>Change Password</Button> : ""}
+        {isAuth || localStorage.getItem('isauth') ? <Button size='sm' colorScheme='blue' onClick={HandleLogout}>Logout</Button> : ""}
       </Flex>
+
+      {isAuth || localStorage.getItem('isauth') ? 
       <Grid p={4} templateColumns='1fr 1fr 1fr 1fr 1fr 1fr' gap={4}>
         <Stack spacing={0}>
           <Heading size='md'>Keyword</Heading>
@@ -315,6 +376,19 @@ function App() {
           <Text mt={4}>Scanning: {Textarea5CurrentCount} of {Textarea5Count}</Text>
         </Stack>
       </Grid>
+      : 
+      <Stack
+        align='center'
+        justify='center'
+      >
+        <Stack width='450px' mt='5%'>
+          <Heading mb={4}>Login</Heading>
+          <Input value={Username} onChange={(e) => SetUsername(e.currentTarget.value)} mb={2} type='text' placeholder='Username' />
+          <Input value={Password} onChange={(e) => SetPassword(e.currentTarget.value)} type='password' placeholder='Password'/>
+          <Button mt={4} colorScheme='green' onClick={HandleLogin}>Login</Button>
+        </Stack>
+      </Stack>
+      }
     </Container>
   )
 }
